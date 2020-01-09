@@ -13,7 +13,7 @@
 (*                  http://www.gnu.org/licenses/                              *)
 (******************************************************************************)
 From mathcomp Require Import all_ssreflect.
-From mathcomp Require Import boolp classical_sets.
+From mathcomp Require Import boolp.
 
 Require Import order.
 
@@ -26,93 +26,142 @@ Import Order.Syntax.
 Import Order.TTheory.
 Open Scope order_scope.
 
-Notation down x := [orderType of [subType of {y | y < x}]].
-Notation up x := [orderType of [subType of {y | y > x}]].
+
+Lemma predext (T : Type) (p1 p2 : simpl_pred T) : p1 = p2 <-> p1 =i p2.
+Proof.
+split => [-> x // | eqf].
+case: p1 p2 eqf => [p1] [p2] eqf; suff -> : p1 = p2 by [].
+by apply funext => x; have:= eqf x; rewrite !unfold_in /=.
+Qed.
 
 Section Def.
 
-Section Empty.
-
 Variable (u : unit) (X : orderType u).
-Definition is_not_empty : bool := `[<exists x : X, true>].
 
-Lemma is_not_emptyP: reflect (exists x : X, True) is_not_empty.
+Implicit Type (P : pred X).
+
+Definition down P x := [predI P & [pred y | y < x]].
+Definition up P x := [predI P & [pred y | y > x]].
+
+Lemma up_pred0 x : up pred0 x = pred0.
+Proof. by apply predext => y; rewrite !inE. Qed.
+Lemma down_pred0 x : down pred0 x = pred0.
+Proof. by apply predext => y; rewrite !inE. Qed.
+
+Lemma up_pred1 x : up (pred1 x) x = pred0.
 Proof.
-apply (iffP (exists_asboolP _)) => [][a] _; exists a => //.
-exact/asboolP.
+apply predext => y; rewrite !inE; case: eqP => // -> /=.
+by rewrite ltxx.
+Qed.
+Lemma down_pred1 x : down (pred1 x) x = pred0.
+Proof.
+apply predext => y; rewrite !inE; case: eqP => // -> /=.
+by rewrite ltxx.
 Qed.
 
-Lemma is_not_emptyX (x : X) : is_not_empty.
-Proof. by apply/is_not_emptyP; exists x. Qed.
 
-Lemma is_emptyX : (X -> False) -> is_not_empty = false.
-Proof. by rewrite /is_not_empty => notX; apply/is_not_emptyP => [][] /notX. Qed.
-
-End Empty.
-
-
-Fixpoint nth_char_type (n : nat) : finType :=
+Fixpoint char_type n : finType :=
   if n is n'.+1 then
-     [finType of {set (nth_char_type n') * (nth_char_type n')}]
+     [finType of {set (char_type n') * (char_type n')}]
   else [finType of bool].
 
-Fixpoint nth_char_rec (n : nat) (u : unit) (X : orderType u) :
-  nth_char_type n :=
+Fixpoint char_rec n P : char_type n :=
   if n is n'.+1 then
     [set Cpair |
-     `[<exists x : X, (nth_char_rec n' (down x),
-                       nth_char_rec n' (up x)) = Cpair >]]
-  else
-    (is_not_empty X : nth_char_type 0).
+     `[exists x in P, (char_rec n' (down P x), char_rec n' (up P x)) == Cpair ]]
+  else `[exists x, x \in P].
+Definition char n P := nosimpl (char_rec n P).
 
-Definition nth_char (n : nat) (u : unit) (X : orderType u) of phant X :=
-  nth_char_rec n X.
+Lemma char0P P : reflect (exists x : X, x \in P) (char 0 P).
+Proof. exact/existsbP. Qed.
+
+Lemma mem_charP n P l r :
+  reflect
+    (exists x : X, [/\ x \in P, char n (down P x) = l & char n (up P x) = r])
+    ((l, r) \in char n.+1 P).
+Proof.
+apply (iffP idP); rewrite /char /= inE.
+- by move/existsbP => [x /andP [xinP /eqP [<- <-]]]; exists x.
+- move=> [x [xinP <- <-]]; apply/existsbP; exists x.
+  exact/andP.
+Qed.
+
+Lemma char0_pred0 : char 0 pred0 = false.
+Proof. by apply/char0P => [] [x]; rewrite inE. Qed.
+Lemma char0_true P : char 0 P -> P <> pred0.
+Proof.
+move/char0P => [x xinP eqP0].
+by move: xinP; rewrite eqP0 inE.
+Qed.
+
+Lemma char1_pred0 P : char 1 pred0 = finset.set0.
+Proof.
+apply/setP => [[l r]].
+rewrite [RHS]inE; apply/negP => /(mem_charP (n := 0)) [x []].
+by rewrite inE.
+Qed.
+
+Lemma char10P P : char 1 P = finset.set0 -> P = pred0.
+Proof.
+move=> ch1; apply funext => x /=.
+apply/negP => Px.
+suff : (char 0 (down P x), char 0 (up P x)) \in char 1 P.
+  by rewrite ch1 inE.
+by apply/mem_charP; exists x.
+Qed.
+
+
+Lemma char1pred1 x0 : char 1 (pred1 x0) = [set (false, false)].
+Proof.
+apply/setP => [] [[|] /= b]; rewrite in_set1 ?eqE /=.
+  apply/negP => /(mem_charP (n := 0)) /= [x []].
+  rewrite inE => /eqP ->{x}.
+  by rewrite down_pred1 char0_pred0.
+case: b; rewrite eqE /= /eqb /=.
+- apply/negP => /(mem_charP (n := 0)) /= [x []].
+  rewrite inE => /eqP ->{x} _.
+  by rewrite up_pred1 char0_pred0.
+- apply/(mem_charP (n := 0)); exists x0.
+  by rewrite inE down_pred1 up_pred1 char0_pred0.
+Qed.
+
+Lemma charFF P :
+  (false, false) \in char 1 P -> exists x, P = pred1 x.
+Proof.
+move/mem_charP => [x [xinP /char0P downP /char0P upP]].
+exists x; apply funext => y.
+rewrite [RHS]inE /= eq_sym.
+have /= -> := (topredE y P).
+case: (ltgtP x y) => [ltxy|ltyx|<- //].
+- apply/negP => yinP; apply upP; exists y.
+  by rewrite !inE yinP ltxy.
+- apply/negP => yinP; apply downP; exists y.
+  by rewrite !inE yinP ltyx.
+Qed.
+
+Lemma charFFE P :
+  (false, false) \in char 1 P -> char 1 P = [set (false, false)].
+Proof. by move/charFF => [x ->]; apply char1pred1. Qed.
 
 End Def.
 
-Notation char n X := (@nth_char n _ _ (Phant X)).
+Lemma char0nat : char 0 (@predT nat) = true.
+Proof. by apply/char0P; exists 0. Qed.
 
-Section Reflect.
-
-Variable (n : nat) (u : unit) (X : orderType u).
-
-Lemma mem_nth_char l r :
-  reflect
-    (exists2 x : X, char n (down x) = l & char n (up x) = r)
-    ((l, r) \in char n.+1 X).
-Proof.
-rewrite /nth_char /= inE; apply (iffP (exists_asboolP _)) => [][a].
-- by move/asboolP => [<- <-]; exists a.
-- by move=> <- <-; exists a; apply/asboolP.
-Qed.
-
-End Reflect.
-
-Lemma char0nat : char 0 nat = true.
-Proof. by apply/is_not_emptyP; exists 0. Qed.
-
-Lemma char1nat : char 1 nat = [set (false, true); (true, true)].
+Lemma char1nat : char 1 (@predT nat) = [set (false, true); (true, true)].
 Proof.
 apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
-- apply/(@mem_nth_char 0) => /=.
-  exists 1%N; apply/is_not_emptyP => /=.
-  + have lt01 : 0%N < 1%N by rewrite ltEnat.
-    by exists (exist (fun x => x < 1%N) 0 lt01).
-  + have lt12 : 1%N < 2%N by rewrite ltEnat.
-    by exists (exist (fun x => 1%N < x) 2 lt12).
-- apply/negP => /(@mem_nth_char 0) [/= x _].
-  move/is_not_emptyP; apply.
-  have ltx1 : x%N < x.+1%N by rewrite ltEnat.
-  by exists (exist (fun y => x < y) x.+1 ltx1).
-- apply/(@mem_nth_char 0) => /=.
-  exists 0%N; apply/is_not_emptyP => /=.
-  + by move=> [] [y].
-  + have lt01 : 0%N < 1%N by rewrite ltEnat.
-    by exists (exist (fun x => 0 < x) 1%N lt01).
-- apply/negP => /(@mem_nth_char 0) [/= x _].
-  move/is_not_emptyP; apply.
-  have ltx1 : x%N < x.+1%N by rewrite ltEnat.
-  by exists (exist (fun y => x < y) x.+1 ltx1).
+- apply/(mem_charP (n := 0)) => /=.
+  exists 1%N; split => //; apply/char0P => /=.
+  + by exists 0.
+  + by exists 2.
+- apply/negP => /(mem_charP (n := 0)) /= [x [_ _ /char0P]] /=; apply.
+  + by exists x.+1; rewrite !inE ltEnat /=.
+- apply/(mem_charP (n := 0)) => /=.
+  exists 0%N; split => //; apply/char0P => /=.
+  + by move=> [].
+  + by exists 1%N.
+- apply/negP => /(mem_charP (n := 0)) /= [x [_ _ /char0P]] /=; apply.
+  + by exists x.+1; rewrite !inE ltEnat /=.
 Qed.
-
 
