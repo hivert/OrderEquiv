@@ -156,12 +156,12 @@ apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
   + by exists 0.
   + by exists 2.
 - apply/negP => /(mem_charP (n := 0)) /= [x [_ _ /char0P]] /=; apply.
-  + by exists x.+1; rewrite !inE ltEnat /=.
+  by exists x.+1; rewrite !inE ltEnat /=.
 - apply/(mem_charP (n := 0)) => /=.
   exists 0%N; split => //; apply/char0P => /=.
   + by move=> [].
   + by exists 1%N.
 - apply/negP => /(mem_charP (n := 0)) /= [x [_ _ /char0P]] /=; apply.
-  + by exists x.+1; rewrite !inE ltEnat /=.
+  by exists x.+1; rewrite !inE ltEnat /=.
 Qed.
 
