@@ -5,3 +5,5 @@
 -arg -ambiguous-paths
 theories/order.v
 theories/equiv.v
+theories/equivcl.v
+theories/equivmix.v
