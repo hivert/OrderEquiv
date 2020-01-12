@@ -212,24 +212,69 @@ rewrite {}/f => [[chdown chup]] /=.
 by rewrite !IHn.
 Qed.
 
+Lemma mem_rev_char n ch1 ch2 (ch : char_type n.+1) :
+  ((ch1, ch2) \in rev_char ch) = ((rev_char ch2, rev_char ch1) \in ch).
+Proof.
+rewrite /=; apply/imsetP/idP => [[[c1 c2] /= cin [-> ->]] | rchin].
+  by rewrite !rev_charK.
+by exists (rev_char ch2, rev_char ch1); rewrite ?rev_charK.
+Qed.
+
+Lemma mem_rev_char1 (ch1 ch2 : bool) (ch : char_type 1) :
+  ((ch1, ch2) \in rev_char ch) = ((ch2, ch1) \in ch).
+Proof. by rewrite [LHS]mem_rev_char. Qed.
 
 Lemma char0_dual P : char Ord 0 P = char OrdC 0 P.
 Proof. by apply/char0P/char0P => [] [x xinP]; exists x. Qed.
 
-Lemma char_dual n P : char Ord n P = rev_char (char OrdC n P).
+Lemma char_dual n P : rev_char (char OrdC n P) = char Ord n P.
 Proof.
 elim: n P => [|n IHn] P /=; first exact: char0_dual.
 apply/setP => /= [[chdown chup]].
-apply/mem_charP/imsetP => /= [[x [xinP dE uE]] | [[chd chu]]].
-- exists (rev_char chup, rev_char chdown).
-  + apply/mem_charP => /=.
-    by exists x; split; rewrite // -?uE -?dE IHn !rev_charK ?downdual ?updual.
-  + by rewrite /= !rev_charK.
+apply/imsetP/mem_charP => /= [ [[chd chu]] | [x [xinP dE uE]]].
 - move=> /mem_charP [x [xinP <-{chd} <-{chu}]] [->{chdown} ->{chup}].
   by exists x; rewrite -!IHn ?downdual ?updual.
+- exists (rev_char chup, rev_char chdown).
+  + apply/mem_charP => /=.
+    by exists x; split; rewrite // -?uE -?dE -IHn !rev_charK ?downdual ?updual.
+  + by rewrite /= !rev_charK.
 Qed.
 
 End Dual.
+
+
+Section CharPredicate.
+
+Variables (u : unit) (Ord : orderType u).
+Implicit Types (P : pred Ord) (ch : char_type 1).
+
+Lemma charTF P :
+  (true, false) \in char 1 P ->
+  (true, true) \in char 1 P \/ (false, true) \in char 1 P.
+Proof. by rewrite -(char_dual 1 P) !mem_rev_char1; apply: charFT. Qed.
+
+Definition is_char1 ch :=
+  [&&
+   (((false, false) \in ch) ==> (ch == [set (false, false)])),
+   (((true, false) \in ch) ==>
+    (((true, true) \in ch) || ((false, true) \in ch))) &
+   (((false, true) \in ch) ==>
+    (((true, true) \in ch) || ((true, false) \in ch)))].
+
+Lemma is_char1P P : is_char1 (char 1 P).
+Proof.
+apply/and3P; split; apply/implyP.
+- by move/charFFE ->.
+- by move/charTF => [] -> //; rewrite orbT.
+- by move/charFT => [] -> //; rewrite orbT.
+Qed.
+
+End CharPredicate.
+
+
+
+(*******************************************)
+(* Various examples for the classification *)
 
 Lemma char0_nat : char 0 (@predT nat) = true.
 Proof. by apply/char0P; exists 0. Qed.
@@ -256,7 +301,7 @@ Qed.
 Lemma char1_nat_dual :
   char 1 (@predT nat^d) = [set (true, false); (true, true)].
 Proof.
-by rewrite -[LHS]rev_charK -char_dual char1_nat /= imsetU1 imset_set1.
+by rewrite -[LHS]rev_charK char_dual char1_nat /= imsetU1 imset_set1.
 Qed.
 
 
@@ -314,3 +359,126 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
   + by move=> /char0P/= H _; apply: H; exists 0%N.
   + by move=> /char0P/= H _; apply: H; exists 0%N.
 Qed.
+
+
+From mathcomp Require Import ssralg ssrnum ssrint.
+
+Section NumOrdered.
+
+Variable (T : realDomainType).
+
+Import Num.Theory.
+
+Program Definition realDomOrderMixin :=
+  @LeOrderMixin T Num.Def.ler Num.Def.ltr Num.min Num.max _ _ _ _ _ _.
+Next Obligation. by rewrite ltr_def. Qed.
+Next Obligation. exact: ler_anti. Qed.
+Next Obligation. exact: ler_trans. Qed.
+Next Obligation. exact: ler_total. Qed.
+
+Canonical realDom_porderType := POrderType total_display T realDomOrderMixin.
+Canonical realDom_distrLatticeType := DistrLatticeType T realDomOrderMixin.
+Canonical realDom_orderType := OrderType T realDomOrderMixin.
+
+Lemma leRealDomE (x y : T) : (x <= y)%O = (x <= y)%R.
+Proof. by []. Qed.
+Lemma ltRealDomE (x y : T) : (x < y)%O = (x < y)%R.
+Proof. by []. Qed.
+
+End NumOrdered.
+
+Definition int_orderMixin := realDomOrderMixin [realDomainType of int].
+Canonical int_porderType := POrderType total_display int int_orderMixin.
+Canonical int_distrLatticeType := DistrLatticeType int int_orderMixin.
+Canonical int_orderType := OrderType int int_orderMixin.
+
+Lemma char0_int : char 0 (@predT int) = true.
+Proof. by apply/char0P; exists 0%R. Qed.
+
+Lemma char1_int : char 1 (@predT int) = [set (true, true)].
+Proof.
+apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
+- apply/(mem_charP (n := 0)) => /=.
+  exists 0%R; split => //; apply/char0P => /=.
+  + by exists (- 1)%R.
+  + by exists 1%R.
+- apply/negP => /(mem_charP (n := 0)) /= [i [_]].
+  move=> _ /char0P/= H; apply: H; exists (i + 1)%R.
+  apply/upP; split => //=.
+  by rewrite ltRealDomE ltz_addr1.
+- apply/negP => /(mem_charP (n := 0)) /= [i [_]].
+  move=> /char0P/= H _; apply: H; exists (i - 1)%R.
+  apply/downP; split => //=.
+  by rewrite ltRealDomE Num.Theory.ltr_subl_addl GRing.addrC ltz_addr1.
+- apply/negP => /(mem_charP (n := 0)) /= [i [_]].
+  move=> /char0P/= H _; apply: H; exists (i - 1)%R.
+  apply/downP; split => //=.
+  by rewrite ltRealDomE Num.Theory.ltr_subl_addl GRing.addrC ltz_addr1.
+Qed.
+
+
+Section Classification.
+
+Variables (u : unit) (Ord : orderType u).
+Implicit Type (x t : Ord) (P : pred Ord) (ch : char_type 1).
+
+Definition classif : list (char_type 1) :=
+  [::
+     set0;                                              (* empty     *)
+     [set (false, false)];                              (* {0}       *)
+     [set (false, true); (true, false)];                (* {0, 1}    *)
+     [set (false, true); (true, true); (true, false)];  (* {0, 1, 2} *)
+     [set (false, true); (true, true)];                 (* nat       *)
+     [set (true, false); (true, true)];                 (* nat^d     *)
+     [set (true, true)]                                 (* int       *)
+  ].
+
+Lemma classifE :
+  classif =
+  [::
+     char 1 (@pred0 nat);                               (* empty     *)
+     char 1 (pred1 0%N);                                (* {0}       *)
+     char 1 [pred i | i < 2];                           (* {0, 1}    *)
+     char 1 [pred i | i < 3];                           (* {0, 1, 2} *)
+     char 1 (@predT nat);                               (* nat       *)
+     char 1 (@predT nat^d);                             (* nat^d     *)
+     char 1 (@predT int)                                (* int       *)
+  ].
+Proof.
+rewrite /classif -(char1_pred0 [orderType of nat]) -(char1_pred1 0%N).
+by rewrite -char1_nat2 -char1_nat3 -char1_nat -char1_nat_dual -char1_int.
+Qed.
+
+(* Should be automatized *)
+Lemma eq_char1 ch1 ch2 :
+  (ch1 == ch2) =
+  [&& ((false, false) \in ch1) == ((false, false) \in ch2),
+      ((false, true ) \in ch1) == ((false, true ) \in ch2),
+      ((true , false) \in ch1) == ((true , false) \in ch2) &
+      ((true , true ) \in ch1) == ((true , true ) \in ch2)].
+Proof.
+apply/eqP/and4P => [->| [/eqP FF /eqP FT /eqP TF /eqP TT]]//.
+by apply/setP => [][[|][|]].
+Qed.
+
+
+(* There are no duplicate in the classification *)
+Proposition classif_uniq : uniq classif.
+Proof. by rewrite /classif /= !inE !eq_char1 !inE. Qed.
+
+Theorem is_char1E ch : (is_char1 ch) = (ch \in classif).
+Proof.
+apply/idP/idP.
+- rewrite /classif /is_char1 !inE !eq_char1 !inE.
+  rewrite !eqE /= !eqE /eqb /= /eqb /= !(addbF, addbT) /=.
+  by repeat case: (boolP (_ \in _)) => _;
+     rewrite ?(inE, orbT, orbF, andbF, andbT) //=.
+- rewrite classifE !inE.
+  by repeat (move/orP => []; try (move/eqP->; exact: is_char1P)).
+Qed.
+
+(* All characters are in the classification *)
+Corollary classifP P : char 1 P \in classif.
+Proof. rewrite -is_char1E; exact: is_char1P. Qed.
+
+End Classification.
