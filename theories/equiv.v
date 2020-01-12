@@ -489,12 +489,10 @@ apply/idP/idP.
   rewrite /classif_char1 /classif_order /= !expand_classif /=.
   (* Expand computationally equality of char 1 *)
   rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
-  (* Expand computationally equality of char 0, ie. pairs of bool *)
-  rewrite !eqE /= !eqE /eqb /= /eqb /= !bool_simp /=.
   (* case analysis *)
-  by repeat case: (boolP (_ \in _)) => _; rewrite ?(inE, bool_simp) //=.
+  by repeat case: (boolP (_ \in _)) => _; rewrite ?inE //=.
 - rewrite !inE.
-  by repeat (move/orP => []; try (move/eqP->; exact: is_char1P)).
+  by repeat move/orP => []; try (move/eqP->; exact: is_char1P).
 Qed.
 
 (* All characters are in the classification *)
