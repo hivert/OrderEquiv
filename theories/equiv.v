@@ -53,8 +53,7 @@ Qed.
 Lemma eq_finset_enum (T : finType) (s1 s2 : {set T}) :
   (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
 Proof.
-apply/eqP/allP => [-> // | Heq].
-apply/setP => t; apply/eqP/Heq.
+apply/eqP/allP => [-> // | Heq]; apply/setP => t; apply/eqP/Heq.
 by rewrite mem_enum.
 Qed.
 
@@ -287,13 +286,14 @@ Lemma charTF P :
   (true, true) \in char 1 P \/ (false, true) \in char 1 P.
 Proof. by rewrite -(char_dual 1 P) !mem_rev_char1; apply: charFT. Qed.
 
-Definition is_char1 ch :=
-  [&&
+Definition is_char1 :=
+  [pred ch : char_type 1 | [&&
    (((false, false) \in ch) ==> (ch == [set (false, false)])),
    (((true, false) \in ch) ==>
     (((true, true) \in ch) || ((false, true) \in ch))) &
    (((false, true) \in ch) ==>
-    (((true, true) \in ch) || ((true, false) \in ch)))].
+    (((true, true) \in ch) || ((true, false) \in ch)))
+  ]].
 
 Lemma is_char1P P : is_char1 (char 1 P).
 Proof.
@@ -456,33 +456,37 @@ Section Classification.
 Variables (u : unit) (Ord : orderType u).
 Implicit Type (x t : Ord) (P : pred Ord) (ch : char_type 1).
 
-Definition classif : list (char_type 1) :=
-  [::
-     char 1 (@pred0 nat);                               (* empty     *)
-     char 1 (pred1 0%N);                                (* {0}       *)
-     char 1 [pred i | i < 2];                           (* {0, 1}    *)
-     char 1 [pred i | i < 3];                           (* {0, 1, 2} *)
-     char 1 (@predT nat);                               (* nat       *)
-     char 1 (@predT nat^d);                             (* nat^d     *)
-     char 1 (@predT int)                                (* int       *)
-  ].
+Record ordPred := OrdPred {
+                      disp_ordPred : unit;
+                      type_ordPred : orderType disp_ordPred;
+                      pred_ordPred :> pred type_ordPred
+                    }.
 
-Definition expand_classif :=
-  (char1_pred0 [orderType of nat], char1_pred1 0%N, char1_nat2, char1_nat3,
-   char1_nat, char1_nat_dual, char1_int).
+Definition classif_order : seq ordPred := [::
+     OrdPred (@pred0 nat);                               (* empty     *)
+     OrdPred (pred1 0%N);                                (* {0}       *)
+     OrdPred [pred i | i < 2];                           (* {0, 1}    *)
+     OrdPred [pred i | i < 3];                           (* {0, 1, 2} *)
+     OrdPred (@predT nat);                               (* N         *)
+     OrdPred (@predT nat^d);                             (* -N        *)
+     OrdPred (@predT int)                                (* Z         *)
+  ].
+Definition classif_char1 := map (fun pr : ordPred => char 1 pr) classif_order.
+Definition expand_classif := (char1_pred0 [orderType of nat], char1_pred1 0%N,
+                char1_nat2, char1_nat3, char1_nat, char1_nat_dual, char1_int).
 
 (* There are no duplicate in the classification *)
-Proposition classif_uniq : uniq classif.
+Proposition classif_uniq : uniq classif_char1.
 Proof.
-rewrite /classif !expand_classif /=.
+rewrite /classif_char1 /classif_order /= !expand_classif /=.
 by rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
 Qed.
 
-Theorem is_char1E ch : (is_char1 ch) = (ch \in classif).
+Theorem is_char1E ch : (is_char1 ch) = (ch \in classif_char1).
 Proof.
 apply/idP/idP.
 - (* Expand the definitions and the classification *)
-  rewrite /classif !expand_classif /is_char1.
+  rewrite /classif_char1 /classif_order /= !expand_classif /=.
   (* Expand computationally equality of char 1 *)
   rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
   (* Expand computationally equality of char 0, ie. pairs of bool *)
@@ -494,7 +498,7 @@ apply/idP/idP.
 Qed.
 
 (* All characters are in the classification *)
-Corollary classifP P : char 1 P \in classif.
+Corollary classifP P : char 1 P \in classif_char1.
 Proof. rewrite -is_char1E; exact: is_char1P. Qed.
 
 End Classification.
