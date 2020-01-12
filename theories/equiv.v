@@ -28,6 +28,8 @@ Open Scope order_scope.
 
 
 
+Definition bool_simp := (addbF, addbT, andbT, andbF, orbT, orbF).
+
 Lemma predext (T : Type) (p1 p2 : simpl_pred T) : p1 = p2 <-> p1 =i p2.
 Proof.
 split => [-> x // | eqf].
@@ -59,10 +61,11 @@ Qed.
 Lemma enum_bool : enum [finType of bool] = [:: true; false].
 Proof. by rewrite enumftE. Qed.
 
+(* Not used -- doesn't scale further *)
 Lemma enum_bool_bool :
   enum [finType of bool * bool] =
   [:: (true, true); (true, false); (false, true); (false, false)].
-Proof. by rewrite {1}enumftE; compute; rewrite -enumT enum_bool. Qed.
+Proof. by rewrite enumftE /= /prod_enum enum_bool. Qed.
 
 End CanonicalEnumeration.
 
@@ -455,18 +458,6 @@ Implicit Type (x t : Ord) (P : pred Ord) (ch : char_type 1).
 
 Definition classif : list (char_type 1) :=
   [::
-     set0;                                              (* empty     *)
-     [set (false, false)];                              (* {0}       *)
-     [set (false, true); (true, false)];                (* {0, 1}    *)
-     [set (false, true); (true, true); (true, false)];  (* {0, 1, 2} *)
-     [set (false, true); (true, true)];                 (* nat       *)
-     [set (true, false); (true, true)];                 (* nat^d     *)
-     [set (true, true)]                                 (* int       *)
-  ].
-
-Lemma classifE :
-  classif =
-  [::
      char 1 (@pred0 nat);                               (* empty     *)
      char 1 (pred1 0%N);                                (* {0}       *)
      char 1 [pred i | i < 2];                           (* {0, 1}    *)
@@ -475,31 +466,30 @@ Lemma classifE :
      char 1 (@predT nat^d);                             (* nat^d     *)
      char 1 (@predT int)                                (* int       *)
   ].
-Proof.
-rewrite /classif -(char1_pred0 [orderType of nat]) -(char1_pred1 0%N).
-by rewrite -char1_nat2 -char1_nat3 -char1_nat -char1_nat_dual -char1_int.
-Qed.
 
-(* Should be automatized *)
-Lemma eq_char1 ch1 ch2 :
-  (ch1 == ch2) =
-  all (fun pr => (pr \in ch1) == (pr \in ch2))
-      [:: (true, true); (true, false); (false, true); (false, false)].
-Proof. by rewrite eq_finset_enum enum_bool_bool. Qed.
-
+Definition expand_classif :=
+  (char1_pred0 [orderType of nat], char1_pred1 0%N, char1_nat2, char1_nat3,
+   char1_nat, char1_nat_dual, char1_int).
 
 (* There are no duplicate in the classification *)
 Proposition classif_uniq : uniq classif.
-Proof. by rewrite /classif /= !inE !eq_char1 /= !inE. Qed.
+Proof.
+rewrite /classif !expand_classif /=.
+by rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
+Qed.
 
 Theorem is_char1E ch : (is_char1 ch) = (ch \in classif).
 Proof.
 apply/idP/idP.
-- rewrite /classif /is_char1 !inE !eq_char1 /= !inE.
-  rewrite !eqE /= !eqE /eqb /= /eqb /= !(addbF, addbT) /=.
-  by repeat case: (boolP (_ \in _)) => _;
-     rewrite ?(inE, orbT, orbF, andbF, andbT) //=.
-- rewrite classifE !inE.
+- (* Expand the definitions and the classification *)
+  rewrite /classif !expand_classif /is_char1.
+  (* Expand computationally equality of char 1 *)
+  rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
+  (* Expand computationally equality of char 0, ie. pairs of bool *)
+  rewrite !eqE /= !eqE /eqb /= /eqb /= !bool_simp /=.
+  (* case analysis *)
+  by repeat case: (boolP (_ \in _)) => _; rewrite ?(inE, bool_simp) //=.
+- rewrite !inE.
   by repeat (move/orP => []; try (move/eqP->; exact: is_char1P)).
 Qed.
 
