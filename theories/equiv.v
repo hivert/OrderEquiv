@@ -36,6 +36,37 @@ by apply funext => x; have:= eqf x; rewrite !unfold_in /=.
 Qed.
 
 
+
+Section CanonicalEnumeration.
+
+Definition enumft (T : finType) : list T.
+Proof. case: T => /= T [] /= base [] /= _ en _; exact: en. Defined.
+
+Lemma enumftE (T : finType) : enum T = enumft T.
+Proof.
+rewrite enumT unlock /enumft.
+by case: T => /= T [] /= base [] /=.
+Qed.
+
+Lemma eq_finset_enum (T : finType) (s1 s2 : {set T}) :
+  (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
+Proof.
+apply/eqP/allP => [-> // | Heq].
+apply/setP => t; apply/eqP/Heq.
+by rewrite mem_enum.
+Qed.
+
+Lemma enum_bool : enum [finType of bool] = [:: true; false].
+Proof. by rewrite enumftE. Qed.
+
+Lemma enum_bool_bool :
+  enum [finType of bool * bool] =
+  [:: (true, true); (true, false); (false, true); (false, false)].
+Proof. by rewrite {1}enumftE; compute; rewrite -enumT enum_bool. Qed.
+
+End CanonicalEnumeration.
+
+
 Section Def.
 
 Variable (u : unit) (Ord : orderType u).
@@ -452,24 +483,19 @@ Qed.
 (* Should be automatized *)
 Lemma eq_char1 ch1 ch2 :
   (ch1 == ch2) =
-  [&& ((false, false) \in ch1) == ((false, false) \in ch2),
-      ((false, true ) \in ch1) == ((false, true ) \in ch2),
-      ((true , false) \in ch1) == ((true , false) \in ch2) &
-      ((true , true ) \in ch1) == ((true , true ) \in ch2)].
-Proof.
-apply/eqP/and4P => [->| [/eqP FF /eqP FT /eqP TF /eqP TT]]//.
-by apply/setP => [][[|][|]].
-Qed.
+  all (fun pr => (pr \in ch1) == (pr \in ch2))
+      [:: (true, true); (true, false); (false, true); (false, false)].
+Proof. by rewrite eq_finset_enum enum_bool_bool. Qed.
 
 
 (* There are no duplicate in the classification *)
 Proposition classif_uniq : uniq classif.
-Proof. by rewrite /classif /= !inE !eq_char1 !inE. Qed.
+Proof. by rewrite /classif /= !inE !eq_char1 /= !inE. Qed.
 
 Theorem is_char1E ch : (is_char1 ch) = (ch \in classif).
 Proof.
 apply/idP/idP.
-- rewrite /classif /is_char1 !inE !eq_char1 !inE.
+- rewrite /classif /is_char1 !inE !eq_char1 /= !inE.
   rewrite !eqE /= !eqE /eqb /= /eqb /= !(addbF, addbT) /=.
   by repeat case: (boolP (_ \in _)) => _;
      rewrite ?(inE, orbT, orbF, andbF, andbT) //=.
