@@ -41,8 +41,10 @@ Qed.
 
 Section CanonicalEnumeration.
 
-Definition enumft (T : finType) : list T.
-Proof. case: T => /= T [] /= base [] /= _ en _; exact: en. Defined.
+Definition enumft (T : finType) : seq T :=
+  match T as t return (seq t) with
+    @Finite.Pack T class => Finite.mixin_enum class
+  end.
 
 Lemma enumftE (T : finType) : enum T = enumft T.
 Proof.
@@ -137,10 +139,10 @@ move/char0P => [x xinP eqP0].
 by move: xinP; rewrite eqP0 inE.
 Qed.
 
-Lemma char1_pred0 P : char 1 pred0 = set0.
+Lemma char_pred0 n : char n.+1 pred0 = set0.
 Proof.
-apply/setP => [[l r]].
-rewrite [RHS]inE; apply/negP => /(mem_charP (n := 0)) [x []].
+apply/setP => [[l r]]; rewrite [RHS]inE.
+apply/negP => /(mem_charP (n := n)) [x []].
 by rewrite inE.
 Qed.
 
@@ -153,7 +155,6 @@ suff : (char 0 (down P x), char 0 (up P x)) \in char 1 P.
   by rewrite ch1 inE.
 by apply/mem_charP; exists x.
 Qed.
-
 
 Lemma char1_pred1 x0 : char 1 (pred1 x0) = [set (false, false)].
 Proof.
@@ -339,11 +340,11 @@ by rewrite -[LHS]rev_charK char_dual char1_nat /= imsetU1 imset_set1.
 Qed.
 
 
-Lemma char0_nat2 : char 0 [pred i | i < 2] = true.
+Lemma char0_down2 : char 0 (down predT 2) = true.
 Proof. by apply/char0P; exists 0. Qed.
 
-Lemma char1_nat2 :
-  char 1 [pred i | i < 2] = [set (false, true); (true, false)].
+Lemma char1_down2 :
+  char 1 (down predT 2) = [set (false, true); (true, false)].
 Proof.
 apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
 - apply/negP => /(mem_charP (n := 0)) /= [] [|[|i]];
@@ -367,11 +368,13 @@ apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
 Qed.
 
 
-Lemma char0_nat3 : char 0 [pred i | i < 3%N] = true.
+Lemma char0_down3plus n : char 0 (down predT n.+3) = true.
 Proof. by apply/char0P; exists 0. Qed.
+Lemma char0_down3 : char 0 (down predT 3) = true.
+Proof. exact: char0_down3plus. Qed.
 
-Lemma char1_nat3 :
-  char 1 [pred i | i < 3%N] = [set (false, true); (true, true); (true, false)].
+Lemma char1_down3plus n :
+  char 1 (down predT n.+3) = [set (false, true); (true, true); (true, false)].
 Proof.
 apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
 - apply/(mem_charP (n := 0)) => /=.
@@ -379,9 +382,10 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
   + by exists 0.
   + by exists 2.
 - apply/(mem_charP (n := 0)) => /=.
-  exists 2%N; split => //; apply/char0P => /=.
-  + by exists 0.
-  + move=> [x]; rewrite !inE => /andP [].
+  exists n.+2; split.
+  + by rewrite !inE //= ltEnat !ltnS.
+  + by apply/char0P => /=; exists 0.
+  + apply/char0P => /=[][x]; rewrite !inE => /andP [].
     by rewrite !ltEnat ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
 - apply/(mem_charP (n := 0)) => /=.
   exists 0%N; split => //; apply/char0P => /=.
@@ -393,6 +397,9 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
   + by move=> /char0P/= H _; apply: H; exists 0%N.
   + by move=> /char0P/= H _; apply: H; exists 0%N.
 Qed.
+Lemma char1_down3 :
+  char 1 (down predT 3) = [set (false, true); (true, true); (true, false)].
+Proof. exact: char1_down3plus. Qed.
 
 
 From mathcomp Require Import ssralg ssrnum ssrint.
@@ -462,31 +469,31 @@ Record ordPred := OrdPred {
                       pred_ordPred :> pred type_ordPred
                     }.
 
-Definition classif_order : seq ordPred := [::
-     OrdPred (@pred0 nat);                               (* empty     *)
-     OrdPred (pred1 0%N);                                (* {0}       *)
-     OrdPred [pred i | i < 2];                           (* {0, 1}    *)
-     OrdPred [pred i | i < 3];                           (* {0, 1, 2} *)
-     OrdPred (@predT nat);                               (* N         *)
-     OrdPred (@predT nat^d);                             (* -N        *)
-     OrdPred (@predT int)                                (* Z         *)
+Definition classif1_order : seq ordPred := [::
+     OrdPred (@pred0 nat);          (* empty     *)
+     OrdPred (pred1 0%N);           (* {0}       *)
+     OrdPred (down predT 2);        (* {0, 1}    *)
+     OrdPred (down predT 3);        (* {0, 1, 2} *)
+     OrdPred (@predT nat);          (* N         *)
+     OrdPred (@predT nat^d);        (* -N        *)
+     OrdPred (@predT int)           (* Z         *)
   ].
-Definition classif_char1 := map (fun pr : ordPred => char 1 pr) classif_order.
-Definition expand_classif := (char1_pred0 [orderType of nat], char1_pred1 0%N,
-                char1_nat2, char1_nat3, char1_nat, char1_nat_dual, char1_int).
+Definition classif1 := map (fun pr : ordPred => char 1 pr) classif1_order.
+Definition classif1E := (char_pred0 [orderType of nat], char1_pred1 0%N,
+                char1_down2, char1_down3, char1_nat, char1_nat_dual, char1_int).
 
 (* There are no duplicate in the classification *)
-Proposition classif_uniq : uniq classif_char1.
+Proposition classif_uniq : uniq classif1.
 Proof.
-rewrite /classif_char1 /classif_order /= !expand_classif /=.
+rewrite /classif1 /classif1_order /= !classif1E /=.
 by rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
 Qed.
 
-Theorem is_char1E ch : (is_char1 ch) = (ch \in classif_char1).
+Theorem is_char1E ch : (is_char1 ch) = (ch \in classif1).
 Proof.
 apply/idP/idP.
 - (* Expand the definitions and the classification *)
-  rewrite /classif_char1 /classif_order /= !expand_classif /=.
+  rewrite /classif1 /classif1_order /= !classif1E /=.
   (* Expand computationally equality of char 1 *)
   rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
   (* case analysis *)
@@ -496,7 +503,7 @@ apply/idP/idP.
 Qed.
 
 (* All characters are in the classification *)
-Corollary classifP P : char 1 P \in classif_char1.
+Corollary classifP P : char 1 P \in classif1.
 Proof. rewrite -is_char1E; exact: is_char1P. Qed.
 
 End Classification.
