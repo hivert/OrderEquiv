@@ -52,13 +52,6 @@ rewrite enumT unlock /enumft.
 by case: T => /= T [] /= base [] /=.
 Qed.
 
-Lemma eq_finset_enum (T : finType) (s1 s2 : {set T}) :
-  (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
-Proof.
-apply/eqP/allP => [-> // | Heq]; apply/setP => t; apply/eqP/Heq.
-by rewrite mem_enum.
-Qed.
-
 Lemma enum_bool : enum [finType of bool] = [:: true; false].
 Proof. by rewrite enumftE. Qed.
 
@@ -68,8 +61,82 @@ Lemma enum_bool_bool :
   [:: (true, true); (true, false); (false, true); (false, false)].
 Proof. by rewrite enumftE /= /prod_enum enum_bool. Qed.
 
+
+Variable (T : finType).
+Implicit Type (en : seq T) (s : {set T}).
+
+Lemma eq_finset_enum (s1 s2 : {set T}) :
+  (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
+Proof.
+apply/eqP/allP => [-> // | Heq]; apply/setP => t; apply/eqP/Heq.
+by rewrite mem_enum.
+Qed.
+
+Fixpoint subset_of_seq en : seq {set T} :=
+  if en is x :: en' then
+    let srec := subset_of_seq en' in
+    srec ++ [seq (x |: sr) | sr <- srec]
+  else [:: set0].
+
+Lemma mem_subset_of_seqE en s x :
+  s \in subset_of_seq en -> x \in s -> x \in en.
+Proof.
+elim: en s x => [|e0 en IHen] s x /=.
+  by rewrite !inE => /eqP ->; rewrite inE.
+rewrite mem_cat !inE => /orP [{}/IHen H/H ->|]; first by rewrite orbT.
+move/mapP => /=[s' {}/IHen ins ->{s}].
+by rewrite !inE => /orP [/eqP-> | /ins->]; rewrite ?eqxx ?orbT.
+Qed.
+
+Lemma subset_of_seq_uniq en : uniq en -> uniq (subset_of_seq en).
+Proof.
+elim: en => [|x en IHen]//= /andP [xinen uniqen].
+rewrite cat_uniq IHen //=; apply/andP; split.
+- apply/hasP => [/=[s0 /mapP [/= s sin ->{s0}]]] /mem_subset_of_seqE.
+  by move/(_ x) => Habs; move: xinen; rewrite {}Habs // !inE eqxx.
+- rewrite map_inj_in_uniq ?IHen // => /= s t.
+  move=> /mem_subset_of_seqE mems /mem_subset_of_seqE memt Heq.
+  have /setU1K <- : x \notin s by apply/contra/mems: xinen.
+  rewrite Heq setU1K //.
+  by apply/contra/memt: xinen.
+Qed.
+
+Lemma subset_of_seqP en s : {subset s <= en} -> s \in subset_of_seq en.
+Proof.
+elim: en s => [|x en IHen] s subs /=.
+  by rewrite inE; apply/set0Pn => [[x {}/subs]]; rewrite in_nil.
+rewrite mem_cat; apply/orP.
+case: (boolP (x \in s)) => [xin | xnotin].
+- right; apply/mapP; exists (s :\ x); last by rewrite setD1K.
+  apply: IHen => x0; rewrite !inE => /andP [neqx {}/subs].
+  by rewrite !inE => /orP[]//; apply/contraLR.
+- left; apply: IHen => x0 x0in.
+  move/(_ _ x0in): subs; rewrite inE.
+  suff /negbTE -> : x0 != x by [].
+  by apply/contra: xnotin => /eqP <-.
+Qed.
+
+Definition enum_set := subset_of_seq (enum T).
+
+Lemma enum_finset : perm_eq (enum {set T}) enum_set.
+Proof.
+apply uniq_perm.
+- exact: enum_uniq.
+- exact/subset_of_seq_uniq/enum_uniq.
+- move=> /= s; apply: esym; rewrite mem_enum inE /enum_set.
+  by apply: subset_of_seqP => x _; rewrite mem_enum inE.
+Qed.
+
 End CanonicalEnumeration.
 
+
+(*
+Lemma bla : subset_of_seq (enum_set [finType of bool * bool]) = [::].
+Proof.
+rewrite [subset_of_seq]lock.
+rewrite /enum_set enum_bool_bool /= !setU0 !setUA.
+rewrite -lock /=.
+*)
 
 Section Def.
 
@@ -83,10 +150,14 @@ Definition up P x := [predI P & [pred y | y > x]].
 Lemma downP P x y :
   reflect (y \in P /\ y < x) (y \in down P x).
 Proof. by rewrite !inE; apply andP. Qed.
-
 Lemma upP P x y :
   reflect (y \in P /\ x < y) (y \in up P x).
 Proof. by rewrite !inE; apply andP. Qed.
+
+Lemma down_sub P x : {subset down P x <= P}.
+Proof. by move=> y; rewrite !inE => /andP[]. Qed.
+Lemma up_sub P x : {subset up P x <= P}.
+Proof. by move=> y; rewrite !inE => /andP[]. Qed.
 
 Lemma up_pred0 x : up pred0 x = pred0.
 Proof. by apply predext => y; rewrite !inE. Qed.
@@ -277,6 +348,122 @@ Qed.
 End Dual.
 
 
+Section Isomorphism.
+
+Variables (u : unit) (E : orderType u).
+Variables (v : unit) (F : orderType v) .
+Implicit Type (P : pred E) (Q : pred F) (f : E -> F).
+
+Definition impred (f : E -> F) (P : pred E) y :=
+  `[exists x, (x \in P) && (f x == y)].
+Lemma impredP P f y :
+  reflect (exists2 x, x \in P & f x = y) (impred f P y).
+Proof.
+rewrite /impred; apply (iffP (existsbP _)) => [] [x].
+- by move=> /andP [xin /eqP feq]; exists x.
+- by move=> xin /eqP feq; exists x; rewrite xin feq.
+Qed.
+
+Lemma in_impred f P x : x \in P -> f x \in impred f P.
+Proof. by move=> xin; apply/impredP; exists x. Qed.
+
+Definition is_isom P Q f :=
+  [/\
+   {in P &, injective f},
+   impred f P = Q &
+   {in P &, {homo f : x y / x < y}}
+  ].
+
+Section IsomTheory.
+
+Variables (P : pred E) (Q : pred F) (f : E -> F).
+Hypothesis (isom_f : is_isom P Q f).
+
+Lemma isom_can : {in P &, forall x y, f x < f y -> x < y}.
+Proof.
+move: isom_f => [bif imf morf] x y xin yin ltfxy.
+case: (ltgtP x y) => // [ltyx | eqxy].
+- by rewrite -(lt_asym (f x) (f y)) ltfxy /= morf.
+- by move: ltfxy; rewrite eqxy ltxx.
+Qed.
+
+Lemma isom_impred_down x : x \in P -> impred f (down P x) = down Q (f x).
+Proof.
+move=> xin.
+have:= isom_f => [] [bif <- morf]; apply funext => y.
+rewrite !inE; apply/impredP/andP => [[x1]|[yin lty]].
+- rewrite !inE => /andP [x1in ltx1 <-{y}].
+  by split; [exact: in_impred | exact: morf].
+- move/impredP: yin => [x1 x1in eqy].
+  exists x1; rewrite // !inE x1in /=.
+  by move: lty; rewrite -{}eqy => /isom_can; apply.
+Qed.
+Lemma isom_down x : x \in P -> is_isom (down P x) (down Q (f x)) f.
+Proof.
+move: isom_f => [finj imf morf].
+move=> xin; split.
+- exact/(sub_in2 _ finj)/down_sub.
+- apply funext => y; apply/impredP/andP; rewrite !inE.
+  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
+    by rewrite -imf; split; [exact: in_impred | exact: morf].
+  + rewrite -imf => [[/impredP [x0 x0in <-{y}]]].
+    move=> /(isom_can x0in xin) ltx0x.
+    by exists x0 => //; rewrite !inE x0in ltx0x.
+- exact/(sub_in2 _ morf)/down_sub.
+Qed.
+
+Lemma isom_impred_up x : x \in P -> impred f (up P x) = up Q (f x).
+Proof.
+move=> xin.
+have:= isom_f => [] [bif <- morf]; apply funext => y.
+rewrite !inE; apply/impredP/andP => [[x1]|[yin lty]].
+- rewrite !inE => /andP [x1in ltx1 <-{y}].
+  by split; [exact: in_impred | exact: morf].
+- move/impredP: yin => [x1 x1in eqy].
+  exists x1; rewrite // !inE x1in /=.
+  by move: lty; rewrite -{}eqy => /isom_can; apply.
+Qed.
+Lemma isom_up x : x \in P -> is_isom (up P x) (up Q (f x)) f.
+Proof.
+move: isom_f => [finj imf morf].
+move=> xin; split.
+- exact/(sub_in2 _ finj)/up_sub.
+- apply funext => y; apply/impredP/andP; rewrite !inE.
+  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
+    by rewrite -imf; split; [exact: in_impred | exact: morf].
+  + rewrite -imf => [[/impredP [x0 x0in <-{y}]]].
+    move=> /(isom_can xin x0in) ltx0x.
+    by exists x0 => //; rewrite !inE x0in ltx0x.
+- exact/(sub_in2 _ morf)/up_sub.
+Qed.
+
+End IsomTheory.
+
+Variables (P : pred E) (Q : pred F) (f : E -> F).
+Hypothesis (isom_f : is_isom P Q f).
+
+Lemma char_isom n : char n P = char n Q.
+Proof.
+elim: n P Q isom_f => [|n IHn] /= PP QQ isof.
+  move: isof => [bif imf morf].
+  apply/char0P/char0P => [[x xin] | [y]].
+  + by rewrite -imf; exists (f x); apply: in_impred.
+  + by rewrite -imf => /impredP [x xin_]; exists x.
+apply/setP => [[chu chd]].
+have:= isof => [[bif imf morf]].
+apply/mem_charP/mem_charP => [[x [xin]] | [y [yin]]] <- <-.
+- exists (f x); split.
+  + by rewrite -imf; apply: in_impred.
+  + exact/esym/IHn/isom_down.
+  + exact/esym/IHn/isom_up.
+- move: yin; rewrite -imf => /impredP [x xin <-{y}].
+  exists x; rewrite imf.
+  split => //; apply IHn; [exact: isom_down | exact: isom_up].
+Qed.
+
+End Isomorphism.
+
+
 Section CharPredicate.
 
 Variables (u : unit) (Ord : orderType u).
@@ -332,6 +519,26 @@ apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
 - apply/negP => /(mem_charP (n := 0)) /= [x [_ _ /char0P]] /=; apply.
   by exists x.+1; rewrite !inE ltEnat /=.
 Qed.
+
+Lemma isom_up_nat (n : nat) :
+  is_isom (@predT nat) (up predT n) (fun i => i + n.+1).
+Proof.
+split => /=.
+- apply: (in2W (can_inj (addnK _))).
+- apply funext => i; rewrite !inE /=.
+  apply/impredP/idP => [[/= m _ <-] | ltni].
+  + by rewrite ltEnat addnS ltnS leq_addl.
+  + by exists (i - n.+1); rewrite // subnK.
+- by move=> i j _ _; rewrite !ltEnat ltn_add2r.
+Qed.
+
+Lemma char1_up_nat (n : nat) :
+  char 1 (up predT n) = [set (false, true); (true, true)].
+Proof.
+rewrite -char1_nat; apply esym.
+exact/char_isom/isom_up_nat.
+Qed.
+
 
 Lemma char1_nat_dual :
   char 1 (@predT nat^d) = [set (true, false); (true, true)].
@@ -503,7 +710,59 @@ apply/idP/idP.
 Qed.
 
 (* All characters are in the classification *)
-Corollary classifP P : char 1 P \in classif_char1.
+Corollary classifP P : char 1 P \in classif1.
 Proof. rewrite -is_char1E; exact: is_char1P. Qed.
 
 End Classification.
+
+
+Section Char2.
+
+Lemma down_predT0 : down predT 0%N = pred0.
+Proof. by apply predext => x; rewrite !inE. Qed.
+Lemma down_predT1 : down predT 1%N = pred1 0%N.
+Proof. by apply predext => x; rewrite !inE ltEnat ltnS leqn0. Qed.
+
+
+Definition chcl := nth set0 classif1.
+Notation chcl0  := (chcl 0).
+Notation chcl1  := (chcl 1).
+Notation chcl2  := (chcl 2).
+Notation chcl3  := (chcl 3).
+Notation chclN  := (chcl 4).
+Notation chclNd := (chcl 5).
+Notation chclZ  := (chcl 6).
+
+Variables (u : unit) (Ord : orderType u).
+Implicit Type (x t : Ord) (P : pred Ord).
+
+Lemma chcl0E : chcl0 = set0.
+Proof. by rewrite /chcl /= char_pred0. Qed.
+
+Lemma char2p_pred1 n x : char n.+2 (pred1 x) = [set (set0, set0)].
+Proof.
+apply/setP => /= [[chu chd]]; rewrite [RHS]inE.
+apply/(mem_charP (n := n.+1))/eqP => [[x0 []] | [-> ->]].
+- rewrite inE => /eqP ->{x0}.
+  by rewrite up_pred1 down_pred1 char_pred0 => <- <-.
+- exists x; rewrite !inE.
+  by split; rewrite // ?up_pred1 ?down_pred1 char_pred0.
+Qed.
+
+Local Definition simpl_char := (down_predT0, down_predT1,
+                   classif1E, char1_pred1, char1_up_nat, char1_down3plus).
+
+Lemma char2_nat :
+  char 2 (@predT nat) =
+  [set (chcl0, chclN); (chcl1, chclN); (chcl2, chclN); (chcl3, chclN)].
+Proof.
+rewrite /chcl /= !classif1E.
+apply/setP => [[chu chd]]; rewrite ![in RHS]inE -!orbA.
+apply/(mem_charP (n := 1))/idP=> /= [[x0 [_ <- <-]] {chu chd}|].
+- by case: x0 => [|[|[|n]]]; rewrite ?simpl_char ?eqxx ?orbT.
+- move=> /or4P[]/eqP[-> ->]{chu chd}.
+  + by exists 0%N; split => //; rewrite !simpl_char.
+  + by exists 1%N; split => //; rewrite !simpl_char.
+  + by exists 2%N; split => //; rewrite !simpl_char.
+  + by exists 3%N; split => //; rewrite !simpl_char.
+Qed.
