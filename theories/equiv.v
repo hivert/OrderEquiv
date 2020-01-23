@@ -28,6 +28,8 @@ Import Order.TTheory.
 Open Scope order_scope.
 
 
+Reserved Notation "P '~o' Q" (at level 70, Q at next level).
+
 
 Definition bool_simp := (addbF, addbT, andbT, andbF, orbT, orbF).
 
@@ -372,7 +374,7 @@ Proof. by move=> xin; apply/impredP; exists x. Qed.
 Definition is_isom P Q f :=
   [/\
    {in P &, injective f},
-   impred f P = Q &
+   Q = impred f P &
    {in P &, {homo f : x y / x < y}}
   ].
 
@@ -383,101 +385,159 @@ Hypothesis (isom_f : is_isom P Q f).
 
 Lemma isom_can : {in P &, forall x y, f x < f y -> x < y}.
 Proof.
-move: isom_f => [bif imf morf] x y xin yin ltfxy.
+move: isom_f => [bif imf fmor] x y xin yin ltfxy.
 case: (ltgtP x y) => // [ltyx | eqxy].
-- by rewrite -(lt_asym (f x) (f y)) ltfxy /= morf.
+- by rewrite -(lt_asym (f x) (f y)) ltfxy /= fmor.
 - by move: ltfxy; rewrite eqxy ltxx.
 Qed.
 
 Lemma isom_impred_down x : x \in P -> impred f (down P x) = down Q (f x).
 Proof.
 move=> xin.
-have:= isom_f => [] [bif <- morf]; apply funext => y.
+have:= isom_f => [] [finj -> fmor]; apply funext => y.
 rewrite !inE; apply/impredP/andP => [[x1]|[yin lty]].
 - rewrite !inE => /andP [x1in ltx1 <-{y}].
-  by split; [exact: in_impred | exact: morf].
+  by split; [exact: in_impred | exact: fmor].
 - move/impredP: yin => [x1 x1in eqy].
   exists x1; rewrite // !inE x1in /=.
   by move: lty; rewrite -{}eqy => /isom_can; apply.
 Qed.
-Lemma isom_down x : x \in P -> is_isom (down P x) (down Q (f x)) f.
+Lemma is_isom_down x : x \in P -> is_isom (down P x) (down Q (f x)) f.
 Proof.
-move: isom_f => [finj imf morf].
+move: isom_f => [finj imf fmor].
 move=> xin; split.
 - exact/(sub_in2 _ finj)/down_sub.
-- apply funext => y; apply/impredP/andP; rewrite !inE.
-  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
-    by rewrite -imf; split; [exact: in_impred | exact: morf].
-  + rewrite -imf => [[/impredP [x0 x0in <-{y}]]].
+- apply funext => y; apply/andP/impredP; rewrite !inE.
+  + rewrite imf => [[/impredP [x0 x0in <-{y}]]].
     move=> /(isom_can x0in xin) ltx0x.
     by exists x0 => //; rewrite !inE x0in ltx0x.
-- exact/(sub_in2 _ morf)/down_sub.
+  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
+    by rewrite imf; split; [exact: in_impred | exact: fmor].
+- exact/(sub_in2 _ fmor)/down_sub.
 Qed.
 
 Lemma isom_impred_up x : x \in P -> impred f (up P x) = up Q (f x).
 Proof.
-have:= isom_f => [] [bif <- morf] xin; apply funext => y.
+have:= isom_f => [] [bif -> fmor] xin; apply funext => y.
 rewrite !inE; apply/impredP/andP => [[x1]|[yin lty]].
 - rewrite !inE => /andP [x1in ltx1 <-{y}].
-  by split; [exact: in_impred | exact: morf].
+  by split; [exact: in_impred | exact: fmor].
 - move/impredP: yin => [x1 x1in eqy].
   exists x1; rewrite // !inE x1in /=.
   by move: lty; rewrite -{}eqy => /isom_can; apply.
 Qed.
-Lemma isom_up x : x \in P -> is_isom (up P x) (up Q (f x)) f.
+Lemma is_isom_up x : x \in P -> is_isom (up P x) (up Q (f x)) f.
 Proof.
-move: isom_f => [finj imf morf] xin; split.
+move: isom_f => [finj imf fmor] xin; split.
 - exact/(sub_in2 _ finj)/up_sub.
-- apply funext => y; apply/impredP/andP; rewrite !inE.
-  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
-    by rewrite -imf; split; [exact: in_impred | exact: morf].
-  + rewrite -imf => [[/impredP [x0 x0in <-{y}]]].
+- apply funext => y; apply/andP/impredP; rewrite !inE.
+  + rewrite imf => [[/impredP [x0 x0in <-{y}]]].
     move=> /(isom_can xin x0in) ltx0x.
     by exists x0 => //; rewrite !inE x0in ltx0x.
-- exact/(sub_in2 _ morf)/up_sub.
+  + move=> [x1]; rewrite !inE => /andP[x1in ltx1 <-{y}].
+    by rewrite imf; split; [exact: in_impred | exact: fmor].
+- exact/(sub_in2 _ fmor)/up_sub.
 Qed.
 
 End IsomTheory.
 
-Variables (P : pred E) (Q : pred F) (f : E -> F).
-Hypothesis (isom_f : is_isom P Q f).
-
-Lemma ordchar_isom n : ordchar n P = ordchar n Q.
-Proof.
-elim: n P Q isom_f => [|n IHn] /= PP QQ isof.
-  move: isof => [bif imf morf].
-  apply/ordchar0P/ordchar0P => [[x xin] | [y]].
-  + by rewrite -imf; exists (f x); apply: in_impred.
-  + by rewrite -imf => /impredP [x xin_]; exists x.
-apply/setP => [[chu chd]].
-have:= isof => [[bif imf morf]].
-apply/mem_ordcharP/mem_ordcharP => [[x [xin]] | [y [yin]]] <- <-.
-- exists (f x); split.
-  + by rewrite -imf; apply: in_impred.
-  + exact/esym/IHn/isom_down.
-  + exact/esym/IHn/isom_up.
-- move: yin; rewrite -imf => /impredP [x xin <-{y}].
-  exists x; rewrite imf.
-  split => //; apply IHn; [exact: isom_down | exact: isom_up].
-Qed.
-
 End Isomorphism.
 
+Notation "P '~o' Q" := (exists f, is_isom P Q f).
 
-Section IsomDual.
+Section MoreIsom.
 
 Variables (u : unit) (E : orderType u).
 Variables (v : unit) (F : orderType v).
+Variables (w : unit) (G : orderType v).
+Implicit Type (P : pred E) (Q : pred F) (R : pred G).
 
-Lemma isom_dual P Q (f : E -> F) :
+Lemma is_isom_ordchar P Q f n :
+  is_isom P Q f -> ordchar n P = ordchar n Q.
+Proof.
+elim: n P Q => [|n IHn] /= PP QQ isof.
+  move: isof => [bif imf fmor].
+  apply/ordchar0P/ordchar0P => [[x xin] | [y]].
+  + by rewrite imf; exists (f x); apply: in_impred.
+  + by rewrite imf => /impredP [x xin_]; exists x.
+apply/setP => [[chu chd]].
+have:= isof => [[bif imf fmor]].
+apply/mem_ordcharP/mem_ordcharP => [[x [xin]] | [y [yin]]] <- <-.
+- exists (f x); split.
+  + by rewrite imf; apply: in_impred.
+  + exact/esym/IHn/is_isom_down.
+  + exact/esym/IHn/is_isom_up.
+- move: yin; rewrite imf => /impredP [x xin <-{y}].
+  exists x; rewrite -imf.
+  split => //; apply IHn; [exact: is_isom_down | exact: is_isom_up].
+Qed.
+Lemma isom_ordchar P Q n : P ~o Q -> ordchar n P = ordchar n Q.
+Proof. by move=> [f isof]; apply/is_isom_ordchar/isof. Qed.
+
+Lemma isom_refl P : P ~o P.
+Proof.
+exists id; split => //.
+apply funext => x; apply/idP/impredP => [xin | [x0 x0in <-{x}//]].
+by exists x.
+Qed.
+
+Lemma isom_sym P Q : E -> P ~o Q -> Q ~o P.
+Proof.
+move=> x0 [f isof]; have:= isof => [[finj imf fmor]].
+have imfP y : exists x : E, y \in Q -> x \in P /\ f x = y.
+  case: (boolP (y \in Q)) => [|_]; last by exists x0.
+  by rewrite imf => /impredP [x xin <-{y}]; exists x.
+case: (choice imfP) => [g gP].
+have gin y : y \in Q -> g y \in P by move/gP=> [].
+have {gP} ginv y : y \in Q -> f (g y) = y by move/gP=> [].
+exists g; split.
+- by move=> x y /ginv fgx /ginv fgy /(congr1 f); rewrite fgx fgy.
+- apply funext => x; apply/idP/impredP => [xin | [x1 x1in <-{x}//]].
+  + have : (f x) \in Q by rewrite imf in_impred.
+    exists (f x); first by [].
+    have /finj/(_ xin) : g (f x) \in P.
+      by apply: gin; rewrite imf; apply/impredP; exists x.
+    by apply; apply ginv.
+  + exact: gin.
+- move=> x y xin yin.
+  rewrite -{1}(ginv _ xin) -{1}(ginv _ yin).
+  by move/(isom_can isof); apply; apply gin.
+Qed.
+
+Lemma is_isom_comp P Q R (f : E -> F) (g : F -> G) :
+  is_isom P Q f -> is_isom Q R g -> is_isom P R (g \o f).
+Proof.
+move=> [finj imf fmor] [ginj img gmor]; split.
+- move=> x y xin yin /= /ginj.
+  rewrite imf => /(_ (in_impred _ xin) (in_impred _ yin)).
+  exact: finj.
+- apply funext => z; apply/idP/impredP => [|[x xin <-{z} /=]].
+  + rewrite img => /impredP [y].
+    rewrite imf => /impredP [x xin] <- <-.
+    by exists x.
+  + rewrite img; apply/impredP.
+    by exists (f x); first rewrite imf in_impred.
+- move=> x y xin yin /= /(fmor _ _ xin yin)/gmor.
+  by apply; rewrite imf in_impred.
+Qed.
+Lemma isom_trans P Q R : P ~o Q -> Q ~o R -> P ~o R.
+Proof.
+by move=> [f isof] [g isog]; exists (g \o f); apply: (is_isom_comp isof isog).
+Qed.
+
+Lemma is_isom_dual P Q (f : E -> F) :
   is_isom (E := E) (F := F) P Q f ->
   is_isom (E := [orderType of E^d]) (F := [orderType of F^d]) P Q f.
 Proof.
-move=> [finj imf morf]; split => // x y xinP yinP.
-by rewrite !ltEdual; apply morf.
+move=> [finj imf fmor]; split => // x y xinP yinP.
+by rewrite !ltEdual; apply fmor.
 Qed.
+Lemma isom_dual P Q :
+  (exists f, is_isom (E := E) (F := F) P Q f) ->
+  exists f, is_isom (E := [orderType of E^d]) (F := [orderType of F^d]) P Q f.
+Proof. by move=> [f isof]; exists f; apply: is_isom_dual. Qed.
 
-End IsomDual.
+End MoreIsom.
 
 
 Section OrdcharPredicate.
@@ -536,15 +596,14 @@ apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
   by exists x.+1; rewrite !inE ltEnat /=.
 Qed.
 
-Lemma isom_up_nat (n : nat) :
-  is_isom (@predT nat) (up predT n) (fun i => i + n.+1).
+Lemma isom_up_nat (n : nat) : (@predT nat) ~o (up predT n).
 Proof.
-split => /=.
+exists (fun i => i + n.+1); split => /=.
 - apply: (in2W (can_inj (addnK _))).
 - apply funext => i; rewrite !inE /=.
-  apply/impredP/idP => [[/= m _ <-] | ltni].
-  + by rewrite ltEnat addnS ltnS leq_addl.
+  apply/idP/impredP => [ltni | [/= m _ <-]].
   + by exists (i - n.+1); rewrite // subnK.
+  + by rewrite ltEnat addnS ltnS leq_addl.
 - by move=> i j _ _; rewrite !ltEnat ltn_add2r.
 Qed.
 
@@ -552,7 +611,7 @@ Lemma ordchar1_up_nat (n : nat) :
   ordchar 1 (up predT n) = [set (false, true); (true, true)].
 Proof.
 rewrite -ordchar1_nat; apply esym.
-exact/ordchar_isom/isom_up_nat.
+exact/isom_ordchar/isom_up_nat.
 Qed.
 
 
@@ -643,9 +702,9 @@ Canonical realDom_porderType := POrderType total_display T realDomOrderMixin.
 Canonical realDom_distrLatticeType := DistrLatticeType T realDomOrderMixin.
 Canonical realDom_orderType := OrderType T realDomOrderMixin.
 
-Lemma leRealDomE (x y : T) : (x <= y)%O = (x <= y)%R.
+Lemma leErealdom (x y : T) : (x <= y)%O = (x <= y)%R.
 Proof. by []. Qed.
-Lemma ltRealDomE (x y : T) : (x < y)%O = (x < y)%R.
+Lemma ltErealdom (x y : T) : (x < y)%O = (x < y)%R.
 Proof. by []. Qed.
 
 End NumOrdered.
@@ -674,31 +733,51 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
 - apply/negP => /(mem_ordcharP (n := 0)) /= [i [_]].
   move=> _ /ordchar0P/= H; apply: H; exists (i + 1)%R.
   apply/upP; split => //=.
-  by rewrite ltRealDomE ltz_addr1.
+  by rewrite ltErealdom ltz_addr1.
 - apply/negP => /(mem_ordcharP (n := 0)) /= [i [_]].
   move=> /ordchar0P/= H _; apply: H; exists (i - 1)%R.
   apply/downP; split => //=.
-  by rewrite ltRealDomE ltr_subl_addl addrC ltz_addr1.
+  by rewrite ltErealdom ltr_subl_addl addrC ltz_addr1.
 - apply/negP => /(mem_ordcharP (n := 0)) /= [i [_]].
   move=> /ordchar0P/= H _; apply: H; exists (i - 1)%R.
   apply/downP; split => //=.
-  by rewrite ltRealDomE ltr_subl_addl addrC ltz_addr1.
+  by rewrite ltErealdom ltr_subl_addl addrC ltz_addr1.
 Qed.
 
-Lemma isom_up_int (n : int) :
-  is_isom (@predT nat) (up predT n) (fun i => (Posz i.+1) + n)%R.
+Lemma isom_int_dual :
+  is_isom (E := [orderType of int]) (F := [orderType of int^d])
+          predT predT -%R%R.
 Proof.
 split => /=.
-- by apply in2W => i j /addIr [].
-- apply funext => z; rewrite !inE /=; apply/impredP/idP => /= [[i _ <-]|].
-  + rewrite ltRealDomE -subr_gt0.
-    by rewrite -addrA subrr addr0 ltz_nat.
-  + move=> ltnz; exists (absz (z - (n+1))%R) => //.
-    rewrite -addn1 PoszD -addrA [(1+n)%R]addrC gez0_abs.
-      by rewrite -addrA [(- _ + _)%R]addrC subrr addr0.
-    by rewrite subr_ge0 lez_addr1.
-- move=> i j _ _ ltij.
-  by rewrite ltRealDomE; apply ltr_le_add.
+- by apply: in2W; apply/can_inj/opprK.
+- apply/esym/funext => n; rewrite !inE /=; apply/impredP.
+  by exists (-n)%R => //; rewrite opprK.
+- by move=> i j _ _ ltij; rewrite ltEdual ltErealdom ltr_opp2.
+Qed.
+
+Lemma ismo_nat_int : is_isom predT (up predT ((-1 : int)%R)) Posz.
+Proof.
+split => /=.
+- by apply in2W => i j [].
+- apply/funext => z; rewrite !inE /=; apply/idP/impredP => /= [|[i _ <-]].
+  + by exists `|z| => //; rewrite gez0_abs.
+  + by rewrite ltErealdom -lez_addr1 addrC subrr lez_nat.
+- by move=> i j _ _ ltij; rewrite ltErealdom.
+Qed.
+
+Lemma isom_up_up_int (n m : int) :
+  is_isom (up predT n) (up predT m) (fun i : int => i - n + m)%R.
+Proof.
+split => /=.
+- by apply in2W => i j; rewrite -!addrA => /addIr.
+- apply/funext => z; rewrite !inE /=; apply/idP/impredP => [ltmz|].
+  + exists (z + n - m)%R.
+    * rewrite !inE /= ltErealdom.
+      by rewrite ltr_subr_addr addrC -ltr_subr_addr addrK.
+    * by rewrite -addrA -!addrA [(-m + _)%R]addrC !addrA !addrK.
+  + move => [/= x]; rewrite !inE /= => ltnx <-.
+    by rewrite ltErealdom -ltr_subl_addr subrr subr_gt0.
+- by move=> i j _ _ ltij; rewrite ltErealdom -!addrA; apply ltr_le_add.
 Qed.
 
 End Integer.
