@@ -15,8 +15,6 @@
 From mathcomp Require Import all_ssreflect.
 From mathcomp Require Import boolp.
 
-Require Import order.
-
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -41,16 +39,8 @@ Qed.
 
 Section CanonicalEnumeration.
 
-Definition enumft (T : finType) : seq T :=
-  match T as t return (seq t) with
-    @Finite.Pack T class => Finite.mixin_enum class
-  end.
-
-Lemma enumftE (T : finType) : enum T = enumft T.
-Proof.
-rewrite enumT unlock /enumft.
-by case: T => /= T [] /= base [] /=.
-Qed.
+Lemma enum_bool : enum [finType of bool] = [:: true; false].
+Proof. by rewrite enumT unlock. Qed.
 
 Lemma eq_finset_enum (T : finType) (s1 s2 : {set T}) :
   (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
@@ -59,14 +49,11 @@ apply/eqP/allP => [-> // | Heq]; apply/setP => t; apply/eqP/Heq.
 by rewrite mem_enum.
 Qed.
 
-Lemma enum_bool : enum [finType of bool] = [:: true; false].
-Proof. by rewrite enumftE. Qed.
-
 (* Not used -- doesn't scale further *)
 Lemma enum_bool_bool :
   enum [finType of bool * bool] =
   [:: (true, true); (true, false); (false, true); (false, false)].
-Proof. by rewrite enumftE /= /prod_enum enum_bool. Qed.
+Proof. by rewrite enumT unlock /= /prod_enum enum_bool. Qed.
 
 End CanonicalEnumeration.
 
@@ -112,22 +99,22 @@ Fixpoint char_type n : finType :=
 
 Fixpoint char_rec n P : char_type n :=
   if n is n'.+1 then
-    [set Cpair |
-     `[exists x in P, (char_rec n' (down P x), char_rec n' (up P x)) == Cpair ]]
-  else `[exists x, x \in P].
+    [set Cpair | `[< exists x, (x \in P) &&
+      ((char_rec n' (down P x), char_rec n' (up P x)) == Cpair) >]]
+  else `[< exists x, x \in P >].
 Definition char n P := nosimpl (char_rec n P).
 
 Lemma char0P P : reflect (exists x, x \in P) (char 0 P).
-Proof. exact/existsbP. Qed.
+Proof. exact: (iffP (asboolP _)). Qed.
 
-Lemma mem_charP n P l r :
+Lemma mem_charP {n} P l r :
   reflect
     (exists x, [/\ x \in P, char n (down P x) = l & char n (up P x) = r])
     ((l, r) \in char n.+1 P).
 Proof.
 apply (iffP idP); rewrite /char /= inE.
-- by move/existsbP => [x /andP [xinP /eqP [<- <-]]]; exists x.
-- move=> [x [xinP <- <-]]; apply/existsbP; exists x.
+- by move/asboolP => [x /andP [xinP /eqP [<- <-]]]; exists x.
+- move=> [x [xinP <- <-]]; apply/asboolP; exists x.
   exact/andP.
 Qed.
 
@@ -142,7 +129,7 @@ Qed.
 Lemma char_pred0 n : char n.+1 pred0 = set0.
 Proof.
 apply/setP => [[l r]]; rewrite [RHS]inE.
-apply/negP => /(mem_charP (n := n)) [x []].
+apply/negP => /(@mem_charP n) [x []].
 by rewrite inE.
 Qed.
 
@@ -159,14 +146,14 @@ Qed.
 Lemma char1_pred1 x0 : char 1 (pred1 x0) = [set (false, false)].
 Proof.
 apply/setP => [] [[|] /= b]; rewrite in_set1 ?eqE /=.
-  apply/negP => /(mem_charP (n := 0)) /= [x []].
+  apply/negP => /(@mem_charP 0) /= [x []].
   rewrite inE => /eqP ->{x}.
   by rewrite down_pred1 char0_pred0.
 case: b; rewrite eqE /= /eqb /=.
-- apply/negP => /(mem_charP (n := 0)) /= [x []].
+- apply/negP => /(@mem_charP 0) /= [x []].
   rewrite inE => /eqP ->{x} _.
   by rewrite up_pred1 char0_pred0.
-- apply/(mem_charP (n := 0)); exists x0.
+- apply/(@mem_charP 0); exists x0.
   by rewrite inE down_pred1 up_pred1 char0_pred0.
 Qed.
 
@@ -174,7 +161,7 @@ Qed.
 Lemma charFF P :
   (false, false) \in char 1 P -> exists x, P = pred1 x.
 Proof.
-move/mem_charP => [x [xinP /char0P downP /char0P upP]].
+move/(@mem_charP 0) => [x [xinP /char0P downP /char0P upP]].
 exists x; apply funext => y.
 rewrite [RHS]inE /= eq_sym.
 have /= -> := (topredE y P).
@@ -198,13 +185,13 @@ Lemma charFT P :
   (false, true) \in char 1 P ->
   (true, true) \in char 1 P \/ (true, false) \in char 1 P.
 Proof.
-move/mem_charP => [x0 [x0inP /char0P downP /char0P [x1 /upP[x1inP lt01]]]].
+move/(@mem_charP 0) => [x0 [x0inP /char0P downP /char0P [x1 /upP[x1inP lt01]]]].
 case: (boolP ((true, true) \in char 1 P)) => Htt; [left | right] => //.
-apply/mem_charP; exists x1; split; first by [].
+apply/(@mem_charP 0); exists x1; split; first by [].
 - apply/char0P; exists x0.
   by rewrite -up_down //; apply/upP.
 - apply/char0P => [] [x2 /upP [x2inP lt12]].
-  move: Htt => /negP; apply; apply/mem_charP.
+  move: Htt => /negP; apply; apply/(@mem_charP 0).
   exists x1; split => //; apply/char0P.
   + by exists x0; apply/upP.
   + by exists x2; apply/upP.
@@ -222,12 +209,9 @@ Local Arguments char {u} Ord.
 Local Arguments down {u} Ord.
 Local Arguments up {u} Ord.
 
-Let OrdC := [orderType of Ord^d].
-
-
-Lemma down_dual P x : down OrdC P x = up Ord P x.
+Lemma down_dual P x : down Ord^d P x = up Ord P x.
 Proof. by apply predext => y; rewrite !inE. Qed.
-Lemma up_dual P x : up OrdC P x = down Ord P x.
+Lemma up_dual P x : up Ord^d P x = down Ord P x.
 Proof. by apply predext => y; rewrite !inE. Qed.
 
 
@@ -256,12 +240,12 @@ Qed.
 
 Lemma mem_rev_char1 (ch1 ch2 : bool) (ch : char_type 1) :
   ((ch1, ch2) \in rev_char ch) = ((ch2, ch1) \in ch).
-Proof. by rewrite [LHS]mem_rev_char. Qed.
+Proof. by rewrite (@mem_rev_char 0). Qed.
 
-Lemma char0_dual P : char Ord 0 P = char OrdC 0 P.
+Lemma char0_dual P : char Ord 0 P = char Ord^d 0 P.
 Proof. by apply/char0P/char0P => [] [x xinP]; exists x. Qed.
 
-Lemma char_dual n P : rev_char (char OrdC n P) = char Ord n P.
+Lemma char_dual n P : rev_char (char Ord^d n P) = char Ord n P.
 Proof.
 elim: n P => [|n IHn] P /=; first exact: char0_dual.
 apply/setP => /= [[chdown chup]].
@@ -351,12 +335,12 @@ apply/setP => [] [[|] [|]]; rewrite in_set2 ?eqE /= ?eqE /= ?/eqb /=.
                   rewrite //= inE => [] [] // _.
   + by move=> /char0P/= [x]; rewrite !inE => /andP [].
   + move=> _ /char0P/= [x]; rewrite !inE => /andP [].
-    by rewrite !ltEnat ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
+    by rewrite !ltEnat /= ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
 - apply/(mem_charP (n := 0)) => /=.
   exists 1%N; split => //; apply/char0P => /=.
   + by exists 0.
   + move=> [x]; rewrite !inE => /andP [].
-    by rewrite !ltEnat ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
+    by rewrite !ltEnat /= ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
 - apply/(mem_charP (n := 0)) => /=.
   exists 0%N; split => //; apply/char0P => /=.
   + by move=> [x]; rewrite !inE => /andP [].
@@ -383,10 +367,10 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
   + by exists 2.
 - apply/(mem_charP (n := 0)) => /=.
   exists n.+2; split.
-  + by rewrite !inE //= ltEnat !ltnS.
+  + by rewrite !inE //= ltEnat /= !ltnS.
   + by apply/char0P => /=; exists 0.
   + apply/char0P => /=[][x]; rewrite !inE => /andP [].
-    by rewrite !ltEnat ltnS => /leq_ltn_trans {}H/H; rewrite ltnn.
+    by rewrite !ltEnat /= ltnS => /leq_ltn_trans /[apply]; rewrite ltnn.
 - apply/(mem_charP (n := 0)) => /=.
   exists 0%N; split => //; apply/char0P => /=.
   + by move=> [x]; rewrite !inE => /andP [].
@@ -404,7 +388,7 @@ Proof. exact: char1_down3plus. Qed.
 
 From mathcomp Require Import ssralg ssrnum ssrint.
 
-Section NumOrdered.
+(* Section NumOrdered.
 
 Variable (T : realDomainType).
 
@@ -432,6 +416,7 @@ Definition int_orderMixin := realDomOrderMixin [realDomainType of int].
 Canonical int_porderType := POrderType total_display int int_orderMixin.
 Canonical int_distrLatticeType := DistrLatticeType int int_orderMixin.
 Canonical int_orderType := OrderType int int_orderMixin.
+ *)
 
 Lemma char0_int : char 0 (@predT int) = true.
 Proof. by apply/char0P; exists 0%R. Qed.
@@ -446,15 +431,15 @@ apply/setP => [] [[|] [|]]; rewrite ![in RHS]inE ?eqE /= ?eqE /= ?/eqb /=.
 - apply/negP => /(mem_charP (n := 0)) /= [i [_]].
   move=> _ /char0P/= H; apply: H; exists (i + 1)%R.
   apply/upP; split => //=.
-  by rewrite ltRealDomE ltz_addr1.
+  by rewrite ltzD1.
 - apply/negP => /(mem_charP (n := 0)) /= [i [_]].
   move=> /char0P/= H _; apply: H; exists (i - 1)%R.
   apply/downP; split => //=.
-  by rewrite ltRealDomE Num.Theory.ltr_subl_addl GRing.addrC ltz_addr1.
+  by rewrite Num.Theory.ltrBlDr ltzD1.
 - apply/negP => /(mem_charP (n := 0)) /= [i [_]].
   move=> /char0P/= H _; apply: H; exists (i - 1)%R.
   apply/downP; split => //=.
-  by rewrite ltRealDomE Num.Theory.ltr_subl_addl GRing.addrC ltz_addr1.
+  by rewrite Num.Theory.ltrBlDr ltzD1.
 Qed.
 
 
@@ -479,14 +464,14 @@ Definition classif1_order : seq ordPred := [::
      OrdPred (@predT int)           (* Z         *)
   ].
 Definition classif1 := map (fun pr : ordPred => char 1 pr) classif1_order.
-Definition classif1E := (char_pred0 [orderType of nat], char1_pred1 0%N,
+Definition classif1E := (char_pred0 nat, char1_pred1 0%N,
                 char1_down2, char1_down3, char1_nat, char1_nat_dual, char1_int).
 
 (* There are no duplicate in the classification *)
 Proposition classif_uniq : uniq classif1.
 Proof.
 rewrite /classif1 /classif1_order /= !classif1E /=.
-by rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
+by rewrite !inE !eq_finset_enum !enum_bool_bool /= !inE.
 Qed.
 
 Theorem is_char1E ch : (is_char1 ch) = (ch \in classif1).
@@ -495,7 +480,7 @@ apply/idP/idP.
 - (* Expand the definitions and the classification *)
   rewrite /classif1 /classif1_order /= !classif1E /=.
   (* Expand computationally equality of char 1 *)
-  rewrite !inE !eq_finset_enum enumftE /= /prod_enum enum_bool /= !inE.
+  rewrite !inE !eq_finset_enum !enum_bool_bool /= !inE.
   (* case analysis *)
   by repeat case: (boolP (_ \in _)) => _; rewrite ?inE //=.
 - rewrite !inE.
