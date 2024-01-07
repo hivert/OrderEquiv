@@ -39,8 +39,13 @@ Qed.
 
 Section CanonicalEnumeration.
 
-Lemma enum_bool : enum [finType of bool] = [:: true; false].
+Lemma enum_bool : enum (bool : finType) = [:: true; false].
 Proof. by rewrite enumT unlock. Qed.
+
+Lemma enum_bool_bool :
+  enum ((bool * bool)%type : finType) =
+  [:: (true, true); (true, false); (false, true); (false, false) ].
+Proof. by rewrite enumT unlock /= /prod_enum enum_bool /=. Qed.
 
 Lemma eq_finset_enum (T : finType) (s1 s2 : {set T}) :
   (s1 == s2) = all (fun pr => (pr \in s1) == (pr \in s2)) (enum T).
@@ -48,12 +53,6 @@ Proof.
 apply/eqP/allP => [-> // | Heq]; apply/setP => t; apply/eqP/Heq.
 by rewrite mem_enum.
 Qed.
-
-(* Not used -- doesn't scale further *)
-Lemma enum_bool_bool :
-  enum [finType of bool * bool] =
-  [:: (true, true); (true, false); (false, true); (false, false)].
-Proof. by rewrite enumT unlock /= /prod_enum enum_bool. Qed.
 
 End CanonicalEnumeration.
 
@@ -93,14 +92,14 @@ Qed.
 
 
 Fixpoint char_type n : finType :=
-  if n is n'.+1 then
-     [finType of {set (char_type n') * (char_type n')}]
-  else [finType of bool].
+  if n is n'.+1 then {set (char_type n') * (char_type n')} else bool.
 
 Fixpoint char_rec n P : char_type n :=
   if n is n'.+1 then
-    [set Cpair | `[< exists x, (x \in P) &&
-      ((char_rec n' (down P x), char_rec n' (up P x)) == Cpair) >]]
+    [set Cpair |
+      `[< exists x,
+            (x \in P) &&
+              ((char_rec n' (down P x), char_rec n' (up P x)) == Cpair) >]]
   else `[< exists x, x \in P >].
 Definition char n P := nosimpl (char_rec n P).
 
@@ -113,7 +112,7 @@ Lemma mem_charP {n} P l r :
     ((l, r) \in char n.+1 P).
 Proof.
 apply (iffP idP); rewrite /char /= inE.
-- by move/asboolP => [x /andP [xinP /eqP [<- <-]]]; exists x.
+- by move/asboolP => [x /andP[xinP /eqP[<- <-]]]; exists x.
 - move=> [x [xinP <- <-]]; apply/asboolP; exists x.
   exact/andP.
 Qed.
@@ -165,7 +164,7 @@ move/(@mem_charP 0) => [x [xinP /char0P downP /char0P upP]].
 exists x; apply funext => y.
 rewrite [RHS]inE /= eq_sym.
 have /= -> := (topredE y P).
-case: (ltgtP x y) => [ltxy|ltyx|<- //].
+case: (ltgtP x y) => [ltxy | ltyx | <- //].
 - apply/negP => yinP; apply upP; exists y.
   by rewrite !inE yinP ltxy.
 - apply/negP => yinP; apply downP; exists y.
@@ -388,36 +387,6 @@ Proof. exact: char1_down3plus. Qed.
 
 From mathcomp Require Import ssralg ssrnum ssrint.
 
-(* Section NumOrdered.
-
-Variable (T : realDomainType).
-
-Import Num.Theory.
-
-Program Definition realDomOrderMixin :=
-  @LeOrderMixin T Num.Def.ler Num.Def.ltr Num.min Num.max _ _ _ _ _ _.
-Next Obligation. by rewrite ltr_def. Qed.
-Next Obligation. exact: ler_anti. Qed.
-Next Obligation. exact: ler_trans. Qed.
-Next Obligation. exact: ler_total. Qed.
-
-Canonical realDom_porderType := POrderType total_display T realDomOrderMixin.
-Canonical realDom_distrLatticeType := DistrLatticeType T realDomOrderMixin.
-Canonical realDom_orderType := OrderType T realDomOrderMixin.
-
-Lemma leRealDomE (x y : T) : (x <= y)%O = (x <= y)%R.
-Proof. by []. Qed.
-Lemma ltRealDomE (x y : T) : (x < y)%O = (x < y)%R.
-Proof. by []. Qed.
-
-End NumOrdered.
-
-Definition int_orderMixin := realDomOrderMixin [realDomainType of int].
-Canonical int_porderType := POrderType total_display int int_orderMixin.
-Canonical int_distrLatticeType := DistrLatticeType int int_orderMixin.
-Canonical int_orderType := OrderType int int_orderMixin.
- *)
-
 Lemma char0_int : char 0 (@predT int) = true.
 Proof. by apply/char0P; exists 0%R. Qed.
 
@@ -482,7 +451,7 @@ apply/idP/idP.
   (* Expand computationally equality of char 1 *)
   rewrite !inE !eq_finset_enum !enum_bool_bool /= !inE.
   (* case analysis *)
-  by repeat case: (boolP (_ \in _)) => _; rewrite ?inE //=.
+  by repeat case: (boolP (_ \in _)) => _; rewrite ?inE.
 - rewrite !inE.
   by repeat move/orP => []; try (move/eqP->; exact: is_char1P).
 Qed.
