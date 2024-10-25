@@ -262,23 +262,21 @@ Section CharPredicate.
 Variables (u : unit) (Ord : orderType u).
 Implicit Types (P : pred Ord) (ch : char_type 1).
 
-Lemma charTF P :
+Lemma charTF P :  (* Dual lemma of charFT *)
   (true, false) \in char 1 P ->
   (true, true) \in char 1 P \/ (false, true) \in char 1 P.
 Proof. by rewrite -(char_dual 1 P) !mem_rev_char1; apply: charFT. Qed.
 
-
 (** This is a characterization of sets which are of char 1 of some predicate *)
+(*  However, we will show it only at the end !                               *)
 Definition is_char1 :=
   [pred ch : char_type 1 | [&&
-   (((false, false) \in ch) ==> (ch == [set (false, false)])),
-   (((true, false) \in ch) ==>
-    (((true, true) \in ch) || ((false, true) \in ch))) &
-   (((false, true) \in ch) ==>
-    (((true, true) \in ch) || ((true, false) \in ch)))
+   ((false, false) \in ch) ==> (ch == [set (false, false)]),
+   ((true, false) \in ch) ==> ((true, true) \in ch) || ((false, true) \in ch) &
+   ((false, true) \in ch) ==> ((true, true) \in ch) || ((true, false) \in ch)
   ]].
 
-Lemma is_char1P P : is_char1 (char 1 P).
+Lemma is_char1_char1 P : is_char1 (char 1 P).
 Proof.
 apply/and3P; split; apply/implyP.
 - by move/charFFE ->.
@@ -320,7 +318,6 @@ Lemma char1_nat_dual :
 Proof.
 by rewrite -[LHS]rev_charK char_dual char1_nat /= imsetU1 imset_set1.
 Qed.
-
 
 Lemma char0_down2 : char 0 (down predT 2) = true.
 Proof. by apply/char0P; exists 0. Qed.
@@ -412,7 +409,7 @@ Qed.
 
 
 (** The [char 1] classification *)
-Section Classification.
+Section Classification1.
 
 Variables (u : unit) (Ord : orderType u).
 Implicit Type (x t : Ord) (P : pred Ord) (ch : char_type 1).
@@ -455,16 +452,27 @@ apply/idP/idP.
   (** case analysis *)
   by repeat case: (boolP (_ \in _)) => _; rewrite ?inE.
 - rewrite !inE.
-  by repeat move/orP => []; try (move/eqP->; exact: is_char1P).
+  by repeat move/orP => []; try (move/eqP->; exact: is_char1_char1).
 Qed.
 
 (** All characters are in the classification *)
 Corollary classifP P : exists! i : 'I_7, char 1 P = tnth classif1 i.
 Proof.
 have /tnthP [i Hi] : char 1 P \in classif1.
-  by rewrite -is_char1E; exact: is_char1P.
+  by rewrite -is_char1E; exact: is_char1_char1.
 exists i; split => // j; rewrite {}Hi.
 exact/tuple_uniqP/classif1_uniq.
 Qed.
 
-End Classification.
+(** is_char1 decide if a (ch : char_type) is the characteristic of an actual P *)
+Corollary is_char1P ch :
+  reflect (exists P : ordPred, char 1 P = ch) (is_char1 ch).
+Proof.
+pose Z := (OrdPred (@pred0 bool)). (** to please nth *)
+apply (iffP idP); last by move=> [P <-]; exact: is_char1_char1.
+rewrite is_char1E => /tnthP [i ->].
+exists (nth Z classif1_order i).
+by rewrite /classif1 [RHS](tnth_nth (char 1 Z)) (nth_map Z).
+Qed.
+
+End Classification1.
