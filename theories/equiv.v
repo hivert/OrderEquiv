@@ -61,7 +61,7 @@ End CanonicalEnumeration.
 
 Section Def.
 
-Context {u : unit} (Ord : orderType u).
+Context {d : _} (Ord : orderType d).
 
 Implicit Type (P : pred Ord).
 
@@ -103,7 +103,8 @@ Fixpoint char_rec n P : char_type n :=
             (x \in P) &&
               ((char_rec n' (down P x), char_rec n' (up P x)) == Cpair) >]]
   else `[< exists x, x \in P >].
-Definition char n P := nosimpl (char_rec n P).
+Definition char n P := char_rec n P.
+Arguments char : simpl never.
 
 Lemma char0P P : reflect (exists x, x \in P) (char 0 P).
 Proof. exact: (iffP (asboolP _)). Qed.
@@ -197,11 +198,12 @@ apply/(mem_charP 0); exists x1; split; first by [].
 Qed.
 
 End Def.
+Arguments char : simpl never.
 
 
 Section Dual.
 
-Variable (u : unit) (Ord : orderType u).
+Context {d : _} {Ord : orderType d}.
 Implicit Type (x t : Ord) (P : pred Ord).
 
 Lemma down_dual P x : down (Ord := Ord^d) P x = up P x.
@@ -259,7 +261,7 @@ End Dual.
 
 Section CharPredicate.
 
-Variables (u : unit) (Ord : orderType u).
+Context {d : _} {Ord : orderType d}.
 Implicit Types (P : pred Ord) (ch : char_type 1).
 
 Lemma charTF P :  (* Dual lemma of charFT *)
@@ -411,12 +413,12 @@ Qed.
 (** The [char 1] classification *)
 Section Classification1.
 
-Variables (u : unit) (Ord : orderType u).
+Context {d : _} {Ord : orderType d}.
 Implicit Type (x t : Ord) (P : pred Ord) (ch : char_type 1).
 
 (** Predicate describing a subset of an ordered set *)
 Record ordPred := OrdPred {
-                      disp_ordPred : unit;
+                      disp_ordPred : _;
                       type_ordPred : orderType disp_ordPred;
                       pred_ordPred :> pred type_ordPred
                     }.
@@ -450,7 +452,7 @@ apply/idP/idP.
   (** Expand computationally equality of char 1 *)
   rewrite !inE !eq_finset_enum !enum_bool_bool /= !inE.
   (** case analysis *)
-  by repeat case: (boolP (_ \in _)) => _; rewrite ?inE.
+  by repeat case: (boolP (_ \in _)) => _; rewrite ?inE /=.
 - rewrite !inE.
   by repeat move/orP => []; try (move/eqP->; exact: is_char1_char1).
 Qed.
